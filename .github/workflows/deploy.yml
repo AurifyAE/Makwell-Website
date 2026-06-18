@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: makwell-production
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -12,62 +16,92 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      DEPLOY_PATH: /var/www/html/TV_Screens/Makwell-website
+
     steps:
-      # 1. Checkout latest code
-      - name: Checkout Code
+      # Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. Prepare Makwell folder
-      - name: Prepare Makwell folder
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            sudo mkdir -p /var/www/html/TV_Screens/Makwell-website
-            sudo chown -R ubuntu:ubuntu /var/www/html/TV_Screens/Makwell-website
+      # Verify Repository
+      - name: Verify Files
+        run: |
+          echo "Current Directory:"
+          pwd
 
-       # 3. Upload website files
+          echo "Repository Files:"
+          ls -la
+
+          echo "Index Preview:"
+          head -10 index.html
+
+      # Prepare Deployment Folder
+      - name: Prepare Server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          sudo mkdir -p ${{ env.DEPLOY_PATH }}
+          sudo rm -rf ${{ env.DEPLOY_PATH }}/*
+          sudo chown -R ubuntu:ubuntu ${{ env.DEPLOY_PATH }}
+
+      # Upload Website
       - name: Upload Website
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          overwrite: true
+          rm: false
           source: |
-            about.html
-            amlpolicy.html
-            contact.html
-            index.html
-            properties.html
-            property-single.html
-            services.html
-            tvview.html
-            zakath calculator.html
-            css
-            js
-            images
-            fonts
-            scss
-            favicon.png
-            README.txt
+            *.html
+            css/**
+            js/**
+            images/**
+            fonts/**
+            scss/**
+            *.png
+            *.jpg
+            *.jpeg
+            *.gif
+            *.svg
+            *.ico
+            *.pdf
+            *.mp4
+            *.css
+            *.js
             CNAME
-          target: "/var/www/html/TV_Screens/Makwell-website"
+            README.txt
+          target: ${{ env.DEPLOY_PATH }}
 
-      # 4. Set permissions
-      - name: Set permissions
+      # Fix Permissions
+      - name: Fix Permissions
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            sudo find /var/www/html/TV_Screens/Makwell-website -type d -exec chmod 755 {} \;
-            sudo find /var/www/html/TV_Screens/Makwell-website -type f -exec chmod 644 {} \;
+            sudo find ${{ env.DEPLOY_PATH }} -type d -exec chmod 755 {} \;
+            sudo find ${{ env.DEPLOY_PATH }} -type f -exec chmod 644 {} \;
 
-      # 5. Verify and reload Nginx
-      - name: Reload Nginx
+      # Verify Deployment
+      - name: Verify Deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            ls -lah ${{ env.DEPLOY_PATH }}
+            head -10 ${{ env.DEPLOY_PATH }}/index.html
+
+      # Test Nginx
+      - name: Test Nginx
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -75,4 +109,18 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             sudo nginx -t
+
+      # Reload Nginx
+      - name: Reload Nginx
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
             sudo systemctl reload nginx
+
+      # Deployment Complete
+      - name: Success
+        run: |
+          echo "Deployment Completed Successfully 🚀"
