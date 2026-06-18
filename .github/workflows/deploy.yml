@@ -1,4 +1,4 @@
-name: Deploy Makwell Gold
+name: Deploy Makwell Website
 
 on:
   push:
@@ -9,26 +9,54 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+
     steps:
-      - name: Checkout Repository
+      # 1. Checkout latest code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Deploy to AWS
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.AWS_HOST }}
-          username: ${{ secrets.AWS_USER }}
-          key: ${{ secrets.AWS_PRIVATE_KEY }}
-          source: "."
-          target: "/var/www/html/TV_Screens/Makwell-website"
-          rm: true
-
-      - name: Restart Nginx
+      # 2. Prepare Makwell folder
+      - name: Prepare Makwell folder
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.AWS_HOST }}
-          username: ${{ secrets.AWS_USER }}
-          key: ${{ secrets.AWS_PRIVATE_KEY }}
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo mkdir -p /var/www/html/TV_Screens/Makwell-website
+            sudo chown -R ubuntu:ubuntu /var/www/html/TV_Screens/Makwell-website
+
+      # 3. Upload website files
+      - name: Upload Website
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "./*"
+          target: "/var/www/html/TV_Screens/Makwell-website"
+          strip_components: 1
+
+      # 4. Set permissions
+      - name: Set permissions
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo find /var/www/html/TV_Screens/Makwell-website -type d -exec chmod 755 {} \;
+            sudo find /var/www/html/TV_Screens/Makwell-website -type f -exec chmod 644 {} \;
+
+      # 5. Verify and reload Nginx
+      - name: Reload Nginx
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             sudo nginx -t
-            sudo systemctl restart nginx
+            sudo systemctl reload nginx
