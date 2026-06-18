@@ -28,16 +28,32 @@ jobs:
             sudo mkdir -p /var/www/html/TV_Screens/Makwell-website
             sudo chown -R ubuntu:ubuntu /var/www/html/TV_Screens/Makwell-website
 
-      # 3. Upload website files
+       # 3. Upload website files
       - name: Upload Website
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "./*"
+          source: |
+            about.html
+            amlpolicy.html
+            contact.html
+            index.html
+            properties.html
+            property-single.html
+            services.html
+            tvview.html
+            zakath calculator.html
+            css
+            js
+            images
+            fonts
+            scss
+            favicon.png
+            README.txt
+            CNAME
           target: "/var/www/html/TV_Screens/Makwell-website"
-          strip_components: 1
 
       # 4. Set permissions
       - name: Set permissions
